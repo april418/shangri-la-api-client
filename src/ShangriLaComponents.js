@@ -5,44 +5,57 @@ import SelectField from 'material-ui/SelectField'
 import MenuItem from 'material-ui/MenuItem'
 import { Table, TableBody, TableHeader, TableHeaderColumn, TableRow, TableRowColumn } from 'material-ui/Table'
 import moment from 'moment'
-import ShangriLaMasterAPI, { ShangriLaCoursAPI } from './ShangriLaAPI.js'
+import ShangriLaComponentStore from './ShangriLaComponentStore.js'
+import ShangriLaActionCreator from './ShangriLaActionCreator.js'
 
-class ShangriLaRender extends Component {
+const store = new ShangriLaComponentStore()
+const initial_state = store.state
+
+class ShangriLaComponent extends Component {
+  constructor(props) {
+    super(props)
+    this.state = props.state || {api: initial_state}
+    this.handleStateChanged = this.handleStateChanged.bind(this)
+    store.subscribe(this.handleStateChanged)
+  }
+
+  handleStateChanged() {
+    this.setState({api: store.state})
+  }
+}
+
+class ShangriLaRender extends ShangriLaComponent {
   render() {
     return (
       <Paper>
-        <ShangriLaToolbar />
-        <ShangriLaTable />
+        <ShangriLaToolbar state={this.state} />
+        <ShangriLaTable state={this.state} />
       </Paper>
     )
   }
 }
 
-class ShangriLaToolbar extends Component {
+class ShangriLaToolbar extends ShangriLaComponent {
   render() {
     return (
       <Toolbar>
         <ToolbarGroup>
-          <ShangriLaCourSelector />
+          <ToolbarTitle text="時期" />
+          <ShangriLaCourSelector state={this.state} />
         </ToolbarGroup>
       </Toolbar>
     )
   }
 }
 
-class ShangriLaCourSelector extends Component {
+class ShangriLaCourSelector extends ShangriLaComponent {
   constructor(props) {
     super(props)
-    this.state = {
-      api: new ShangriLaCoursAPI(),
-      selected: null,
-      data: {}
-    }
     this.handleChange = this.handleChange.bind(this)
   }
 
   handleChange(event, index, value) {
-    this.setState({selected: value})
+    store.dispatch(ShangriLaActionCreator.selectorChanged(this.state.data[value]))
   }
 
   getMenuItemContent(item) {
@@ -50,13 +63,15 @@ class ShangriLaCourSelector extends Component {
   }
 
   async componentWillMount() {
-    this.setState({data: await this.state.api.call()})
+    this.setState({data: await this.state.api.fetchCoursData()})
   }
 
   render() {
     const data = this.state.data
+    const current_value = (this.state.api.selected_cour.id || 0).toString()
+    if(!data) return null
     return (
-      <SelectField value={this.state.selected} onChange={this.handleChange}>
+      <SelectField value={current_value} onChange={this.handleChange}>
         {
           Object.keys(data).map(
             (key, index) => <MenuItem key={index} value={key} primaryText={this.getMenuItemContent(data[key])} />
@@ -67,46 +82,39 @@ class ShangriLaCourSelector extends Component {
   }
 }
 
-class ShangriLaTableBase extends Component {
-  get columns() {
-    return {
-      //id: 'ID',
-      title: 'タイトル',
-      //title_short1: '略称1',
-      //title_short2: '略称2',
-      //title_short3: '略称3',
-      public_url: '公式ホームページ',
-      twitter_account: 'ツイッターアカウント',
-      twitter_hash_tag: 'ツイッターハッシュタグ',
-      //cours_id: 'クールID',
-      //created_at: '作成日時',
-      //updated_at: '更新日時',
-      sex: '男性/女性向け',
-      sequel: 'アニメシリーズ何作目'
-    }
-  }
+const SHANGRILA_TABLE_COLUMNS = {
+  //id: 'ID',
+  title: 'タイトル',
+  //title_short1: '略称1',
+  //title_short2: '略称2',
+  //title_short3: '略称3',
+  public_url: '公式ホームページ',
+  twitter_account: 'ツイッターアカウント',
+  twitter_hash_tag: 'ツイッターハッシュタグ',
+  //cours_id: 'クールID',
+  //created_at: '作成日時',
+  //updated_at: '更新日時',
+  sex: '男性/女性向け',
+  sequel: 'アニメシリーズ何作目'
 }
 
-class ShangriLaTable extends ShangriLaTableBase {
-  constructor(props) {
-    super(props)
-    this.state = {
-      api: new ShangriLaMasterAPI(),
-      data: []
-    }
+class ShangriLaTable extends ShangriLaComponent {
+  async componentWillMount() {
+    this.setState({data: await this.state.api.fetchMasterData()})
   }
 
-  async componentWillMount() {
-    this.setState({data: await this.state.api.call()})
+  async componentWillUpdate(props, state) {
+    this.setState({data: await state.api.fetchMasterData()})
   }
 
   render() {
+    if(!this.state.data) return null
     return (
       <Table>
         <TableHeader adjustForCheckbox={false} displaySelectAll={false}>
           <TableRow>
             {
-              Object.values(this.columns).map(
+              Object.values(SHANGRILA_TABLE_COLUMNS).map(
                 (value, index) => <TableHeaderColumn key={index}>{value}</TableHeaderColumn>
               )
             }
@@ -115,7 +123,7 @@ class ShangriLaTable extends ShangriLaTableBase {
         <TableBody>
           {
             this.state.data.map(
-              (item, index) => <ShangriLaOverviewRender key={index} data={item} />
+              (item, index) => <ShangriLaOverviewRender key={item.id} data={item} />
             )
           }
         </TableBody>
@@ -124,11 +132,10 @@ class ShangriLaTable extends ShangriLaTableBase {
   }
 }
 
-class ShangriLaOverviewRender extends ShangriLaTableBase {
+class ShangriLaOverviewRender extends Component {
   constructor(props) {
     super(props)
-    this.state = {}
-    if(props.data) this.state.data = props.data
+    this.state = {data: props.data}
   }
 
   getTableDataContent(key) {
@@ -137,9 +144,9 @@ class ShangriLaOverviewRender extends ShangriLaTableBase {
       case 'public_url':
         return <a href={data.public_url}>{data.public_url}</a>
       case 'twitter_account':
-        return <a href={'https://twitter.com/' + data.twitter_account}>{data.twitter_account}</a>
+        return <a href={`https://twitter.com/${data.twitter_account}`}>{data.twitter_account}</a>
       case 'twitter_hash_tag':
-        return <a href={'https://twitter.com/hashtag/' + data.twitter_hash_tag}>{data.twitter_hash_tag}</a>
+        return <a href={`https://twitter.com/hashtag/${data.twitter_hash_tag}`}>{data.twitter_hash_tag}</a>
       case 'created_at':
       case 'updated_at':
         return moment(data[key]).format('YYYY年M月D日H時m分')
@@ -153,11 +160,10 @@ class ShangriLaOverviewRender extends ShangriLaTableBase {
   }
 
   render() {
-    if(!this.state.data) return
     return (
       <TableRow>
         {
-          Object.keys(this.columns).map(
+          Object.keys(SHANGRILA_TABLE_COLUMNS).map(
             (key, index) => <TableRowColumn key={index}>{this.getTableDataContent(key)}</TableRowColumn>
           )
         }
