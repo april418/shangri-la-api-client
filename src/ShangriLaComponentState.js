@@ -1,9 +1,10 @@
-import ShangriLaMasterAPI, { ShangriLaCoursAPI } from './ShangriLaAPI.js'
+import ShangriLaMasterAPI, { ShangriLaCoursAPI, ShangriLaTwitterAPI } from './ShangriLaAPI.js'
 
 class ShangriLaComponentState {
   constructor() {
     this.cours_api = new ShangriLaCoursAPI()
     this.master_api = new ShangriLaMasterAPI()
+    this.twitter_api = new ShangriLaTwitterAPI()
   }
 
   async fetchMasterData() {
@@ -14,6 +15,18 @@ class ShangriLaComponentState {
 
   async fetchCoursData() {
     return await this.cours_api.call()
+  }
+
+  async fetchTwitterFollowers(params) {
+    return await this.twitter_api.getStatus(params)
+  }
+
+  async fetchTwitterFollowersHistory(params) {
+    return await this.twitter_api.getHistory(params)
+  }
+
+  async fetchTwitterFollowersHistoryDaily(params) {
+    return await this.twitter_api.getHistoryDaily(params)
   }
 
   get selected_cour() {
