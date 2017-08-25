@@ -346,7 +346,6 @@ class ShangriLaFollowersRankChart extends ShangriLaComponent {
   }
 
   render() {
-    console.log('render!')
     const base_data = this.state.base_data
     const twitter_data = this.state.twitter_data
     if(base_data && twitter_data) {
