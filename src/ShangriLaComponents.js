@@ -11,7 +11,8 @@ import CircularProgress from 'material-ui/CircularProgress'
 import moment from 'moment'
 import ShangriLaComponentStore from './ShangriLaComponentStore.js'
 import ShangriLaActionCreator from './ShangriLaActionCreator.js'
-import ChartComponent from './Chart.js'
+import ChartComponent from './ChartComponent.js'
+import TwitterUtil from './TwitterUtil.js'
 import './ShangriLaComponents.css'
 
 const store = new ShangriLaComponentStore()
@@ -34,8 +35,16 @@ class ShangriLaRootComponent extends ShangriLaComponent {
   render() {
     return (
       <Paper>
-        <ShangriLaToolbar />
-        <ShangriLaTable />
+        <Tabs>
+          <Tab label="一覧">
+            <ShangriLaToolbar />
+            <ShangriLaTable />
+          </Tab>
+          <Tab label="人気度">
+            <ShangriLaToolbar />
+            <ShangriLaFollowersRankChart />
+          </Tab>
+        </Tabs>
       </Paper>
     )
   }
@@ -90,13 +99,13 @@ const SHANGRILA_TABLE_COLUMNS = {
   //title_short2: '略称2',
   //title_short3: '略称3',
   public_url: '公式ホームページ',
-  twitter_account: 'ツイッターアカウント',
-  twitter_hash_tag: 'ツイッターハッシュタグ',
+  //twitter_account: 'ツイッターアカウント',
+  //twitter_hash_tag: 'ツイッターハッシュタグ',
   //cours_id: 'クールID',
   //created_at: '作成日時',
   //updated_at: '更新日時',
   sex: '男性/女性向け',
-  sequel: 'アニメシリーズ何作目'
+  sequel: 'シリーズ何作目'
 }
 
 class ShangriLaTable extends ShangriLaComponent {
@@ -155,9 +164,9 @@ class ShangriLaTableRow extends Component {
       case 'public_url':
         return <a href={data.public_url}>{data.public_url}</a>
       case 'twitter_account':
-        return <a href={`https://twitter.com/${data.twitter_account}`}>{data.twitter_account}</a>
+        return <a href={TwitterUtil.getAccountURL(data.twitter_account)}>{data.twitter_account}</a>
       case 'twitter_hash_tag':
-        return <a href={`https://twitter.com/hashtag/${data.twitter_hash_tag}`}>{data.twitter_hash_tag}</a>
+        return <a href={TwitterUtil.getHashTagURL(data.twitter_hash_tag)}>{data.twitter_hash_tag}</a>
       case 'created_at':
       case 'updated_at':
         return moment(data[key]).format(DATETIME_FORMAT)
@@ -224,13 +233,19 @@ class ShangriLaTwitterDataOverview extends Component {
   latestDataRender() {
     const data = this.state.latest_data
     const account = this.state.data.twitter_account
+    const tag = this.state.data.twitter_hash_tag
     if(data) {
+      const account_data = data[account]
       return (
         <dl>
+          <dt>ツイッターアカウント</dt>
+          <dd><a href={TwitterUtil.getAccountURL(account)}>{account}</a></dd>
+          <dt>ツイッターハッシュタグ</dt>
+          <dd><a href={TwitterUtil.getHashTagURL(tag)}>{tag}</a></dd>
           <dt>フォロワー数</dt>
-          <dd>{data[account].follower}</dd>
+          <dd>{account_data ? account_data.follower : 'データなし'}</dd>
           <dt>更新日</dt>
-          <dd>{moment.unix(data[account].updated_at).format(DATETIME_FORMAT)}</dd>
+          <dd>{account_data ? moment.unix(account_data.updated_at).format(DATETIME_FORMAT) : 'データなし'}</dd>
         </dl>
       )
     }
@@ -242,11 +257,17 @@ class ShangriLaTwitterDataOverview extends Component {
   historyDataRender() {
     const history_data = this.state.history_data
     if(history_data) {
-      const data = history_data.map(
-        (item) => {
-          return {x: moment.unix(item.updated_at).toDate(), y: item.follower}
-        }
-      )
+      const data = {
+        datasets: [{
+          backgroundColor: 'rgba(0, 188, 212, 0.5)',
+          borderColor: 'rgba(0, 188, 212, 1)',
+          fill: false,
+          label: "フォロワー数推移",
+          data: history_data.map((item) => {
+            return {x: moment.unix(item.updated_at).toDate(), y: item.follower}
+          })
+        }]
+      }
       const options = {
         responsive: true,
         scales: {
@@ -267,7 +288,7 @@ class ShangriLaTwitterDataOverview extends Component {
           }]
         }
       }
-      return <ChartComponent label="フォロワー数推移" data={data} options={options}/>
+      return <ChartComponent type="line" data={data} options={options}/>
     }
     else {
       return this.circularProgressRender()
@@ -277,7 +298,7 @@ class ShangriLaTwitterDataOverview extends Component {
   render() {
     return (
       <TableRowColumn>
-        <RaisedButton label="データ" onClick={this.handleOpen} />
+        <RaisedButton label="ツイッターデータ" onClick={this.handleOpen} />
         <Dialog title={this.state.data.title} modal={false} open={this.state.open} onRequestClose={this.handleClose}>
           <Tabs>
             <Tab label="最新" onActive={this.handleActiveLatestData}>
@@ -290,6 +311,88 @@ class ShangriLaTwitterDataOverview extends Component {
         </Dialog>
       </TableRowColumn>
     )
+  }
+}
+
+class ShangriLaFollowersRankChart extends ShangriLaComponent {
+  constructor(props) {
+    super(props)
+    this.state.should_update = true
+  }
+
+  async componentWillMount() {
+    const base_data = await this.state.api.fetchMasterData()
+    this.setState({
+      base_data: base_data,
+      twitter_data: await this.state.api.fetchTwitterFollowers({
+        accounts: base_data.map((d) => d.twitter_account).join(',')
+      })
+    })
+  }
+
+  shouldComponentUpdate(props, state) {
+    return this.state.api.selected_cour.id !== state.api.selected_cour.id || state.should_update
+  }
+
+  async componentWillUpdate(props, state) {
+    const base_data = await state.api.fetchMasterData()
+    this.setState({
+      base_data: base_data,
+      twitter_data: await state.api.fetchTwitterFollowers({
+        accounts: base_data.map((d) => d.twitter_account).join(',')
+      }),
+      should_update: !state.should_update
+    })
+  }
+
+  render() {
+    console.log('render!')
+    const base_data = this.state.base_data
+    const twitter_data = this.state.twitter_data
+    if(base_data && twitter_data) {
+      const data = {
+        labels: base_data.map((item) => item.title),
+        datasets: [{
+          backgroundColor: 'rgba(0, 188, 212, 0.5)',
+          borderColor: 'rgba(0, 188, 212, 1)',
+          label: "フォロワー数",
+          data: base_data.map((item) => {
+            return twitter_data[item.twitter_account] ? twitter_data[item.twitter_account].follower : 0
+          })
+        }]
+      }
+      const options = {
+        responsive: true,
+        scales: {
+          xAxes: [{
+            display: true,
+            scaleLabel: {
+              display: true,
+              labelString: 'フォロワー数'
+            }
+          }],
+          yAxes: [{
+            display: true,
+            scaleLabel: {
+              display: true,
+              labelString: 'タイトル'
+            }
+          }]
+        }
+      }
+      return (
+        <div style={{padding: '10px'}}>
+          <ChartComponent type="horizontalBar" data={data} options={options}/>
+        </div>
+      )
+    }
+    else {
+      return (
+        <div style={{textAlign: 'center', padding: '20px'}}>
+          <CircularProgress size={80} thickness={5} />
+        </div>
+      )
+    }
   }
 }
 

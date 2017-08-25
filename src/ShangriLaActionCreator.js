@@ -15,8 +15,6 @@ class Action {
 
 const SHANGRILA_ACTIONS = {
   SELECTOR_CHANGED: 'selectorChanged',
-  MASTER_DATA_LOADED: 'masterDataLoaded',
-  COURS_DATA_LOADED: 'coursDataLoaded'
 }
 
 class ShangriLaSelectorChangedAction extends Action {
@@ -25,29 +23,9 @@ class ShangriLaSelectorChangedAction extends Action {
   }
 }
 
-class ShangriLaMasterDataLoadedAction extends Action {
-  constructor(value) {
-    super(SHANGRILA_ACTIONS.MASTER_DATA_LOADED, value)
-  }
-}
-
-class ShangriLaCoursDataLoadedAction extends Action {
-  constructor(value) {
-    super(SHANGRILA_ACTIONS.COURS_DATA_LOADED, value)
-  }
-}
-
 class ShangriLaActionCreator {
   static selectorChanged(value) {
     return new ShangriLaSelectorChangedAction(value)
-  }
-
-  static masterDataLoaded(value) {
-    return new ShangriLaMasterDataLoadedAction(value)
-  }
-
-  static coursDataLoaded(value) {
-    return new ShangriLaCoursDataLoadedAction(value)
   }
 }
 
