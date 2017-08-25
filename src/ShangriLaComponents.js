@@ -40,7 +40,7 @@ class ShangriLaRootComponent extends ShangriLaComponent {
             <ShangriLaToolbar />
             <ShangriLaTable />
           </Tab>
-          <Tab label="人気度">
+          <Tab label="フォロワー数比較">
             <ShangriLaToolbar />
             <ShangriLaFollowersRankChart />
           </Tab>
